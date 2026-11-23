@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGROPERIT Parcelário</title>
+<meta name="description" content="AGROPERIT Parcelário – mapa de parcelas e subparcelas a partir de Excel, com exportação KML para o Google My Maps.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;800&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="top">
+      <img class="logo logo-light" src="assets/logo.png" alt="AGROPERIT – Peritagens &amp; Avaliações · LEADERGREF LDA">
+      <img class="logo logo-dark" src="assets/logo-branco.png" alt="AGROPERIT – Peritagens &amp; Avaliações · LEADERGREF LDA">
+      <button id="theme" class="icon" type="button" title="Mudar entre fundo claro e escuro" aria-label="Mudar entre fundo claro e escuro">◐</button>
+    </div>
+    <h1 class="brand"><span class="a">AGRO</span><span class="p">PERIT</span> <span class="sub">Parcelário</span></h1>
+    <p class="lead">Escolha um Excel com uma coluna <b>PARCELA</b> e outra <b>SUBPARCELA</b> (ou uma só, como <i>123/11</i>). Os polígonos vêm do serviço público do IFAP (Ocupações do Solo atuais).</p>
+
+    <h2>1. Ficheiro</h2>
+    <label class="btn">Escolher ficheiro Excel<input id="file" type="file" accept=".xlsx,.xls,.xlsm,.csv"></label>
+    <div id="fname" class="muted">Nenhum ficheiro escolhido.</div>
+
+    <div id="cols" hidden>
+      <h2>2. Colunas</h2>
+      <label class="muted" for="sheet">Folha</label><select id="sheet"></select>
+      <label class="muted" for="cPar">Coluna da parcela</label><select id="cPar"></select>
+      <label class="muted" for="cSub">Coluna da subparcela</label><select id="cSub"></select>
+      <button id="go" class="btn" type="button">3. Fazer o mapa</button>
+    </div>
+
+    <div id="prog" hidden>
+      <div id="bar"><div></div></div>
+      <div id="sum" class="muted"></div>
+      <div class="actions">
+        <button id="fit" class="btn ghost" type="button" hidden>Ver todos os polígonos</button>
+        <button id="retry" class="btn ghost" type="button" hidden>Repetir as que falharam</button>
+      </div>
+      <h2>Exportar</h2>
+      <label class="check"><input id="optPts" type="checkbox" checked> Incluir um ponto dentro de cada polígono</label>
+      <div class="actions">
+        <button id="kml" class="btn" type="button" disabled>Exportar KML (Google My Maps)</button>
+        <button id="dl" class="btn ghost" type="button" disabled>Descarregar GeoJSON</button>
+      </div>
+      <details class="how">
+        <summary>Como abrir no Google My Maps</summary>
+        <ol>
+          <li>Abra <b>mymaps.google.com</b> e inicie sessão na sua conta Google.</li>
+          <li>Clique em <b>Criar um novo mapa</b>.</li>
+          <li>Na janela “Mapa sem título”, clique em <b>Importar</b>.</li>
+          <li>Arraste o ficheiro <b>.kml</b> descarregado (ou escolha-o no computador).</li>
+          <li>Devem aparecer duas camadas: <b>Polígonos</b> e <b>Pontos</b>. Clique num polígono para ver a tabela de dados.</li>
+        </ol>
+      </details>
+    </div>
+
+    <label class="check pts"><input id="showPts" type="checkbox" checked> Mostrar pontos no mapa</label>
+    <div id="list"></div>
+
+    <p class="foot muted">AGROPERIT – Peritagens &amp; Avaliações · LEADERGREF LDA<br>
+    Dados: iSIP Público (IFAP). Imagem de satélite: Google.<br>
+    O Excel é lido no seu computador; só os números de parcela são enviados ao IFAP para obter os polígonos.</p>
+  </aside>
+  <main id="map" aria-label="Mapa"></main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
