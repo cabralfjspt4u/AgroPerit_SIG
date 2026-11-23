@@ -17,6 +17,8 @@
   const google = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: 'Imagem © Google' }).addTo(map);
   const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagem © Esri' });
   L.control.layers({ 'Google Satélite': google, 'Esri Satélite': esri }).addTo(map);
+    if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize()).observe($('map'));
+  setTimeout(() => map.invalidateSize(), 400);
   const group = L.featureGroup().addTo(map), ptGroup = L.featureGroup().addTo(map);
   $('showPts').onchange = e => { e.target.checked ? map.addLayer(ptGroup) : map.removeLayer(ptGroup); };
 

@@ -171,9 +171,11 @@ LEFT JOIN cultura c ON c.id = i.cultura_id;`;
         let P = idStr(C.parcela ? row[C.parcela] : null), S = idStr(C.subparcela ? row[C.subparcela] : null);
         if ((!P || !S) && C.comb) { const t = String(row[C.comb] || '').split('/'); P = P || (t[0] || '').trim(); S = S || (t[1] || '').trim(); }
         const apolice = txt(row[C.apolice]), adesaoN = idStr(row[C.adesao]), nif = idStr(row[C.nif]), nome = txt(row[C.tomador]);
-        if (!/^\d+$/.test(P || '') || !/^\d+$/.test(S || '') || !apolice || !adesaoN || !nif || !nome) {
-          rep.ignoradas++; if (rep.avisos.length < 30) rep.avisos.push('Linha ' + linha + ' ignorada: faltam dados (parcela, subparcela, apólice, adesão, NIF ou nome).'); return;
-        }
+        const falta1 = [];
+        if (!/^\d+$/.test(P || '')) falta1.push('parcela' + (P ? ' ("' + P + '")' : ''));
+        if (!/^\d+$/.test(S || '')) falta1.push('subparcela' + (S ? ' ("' + S + '")' : ''));
+        if (!apolice) falta1.push('apólice'); if (!adesaoN) falta1.push('adesão'); if (!nif) falta1.push('NIF'); if (!nome) falta1.push('nome do tomador');
+        if (falta1.length) { rep.ignoradas++; if (rep.avisos.length < 30) rep.avisos.push('Linha ' + linha + ' ignorada: falta ' + falta1.join(', ') + '.'); return; }
         rep.linhas++;
         let alterado = false;
 
