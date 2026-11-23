@@ -1,8 +1,6 @@
 /* AGROPERIT Parcelário – lógica da página */
 (function () {
   'use strict';
-  const WFS = 'https://www.ifap.pt/isip/ows/isip.data/ows';
-  const LAYER = 'isip.data:ocupacoes.solo.atual', PARC_LAYER = 'isip.data:parcelas.atual';
   const $ = id => document.getElementById(id);
   const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -66,30 +64,6 @@
     ITEMS.forEach(mkEl); $('prog').hidden = false; summary(); run(ITEMS);
   };
 
-  /* ---------- pedidos ao IFAP ---------- */
-  const url = (filter, layer) => WFS + '?service=WFS&version=2.0.0&request=GetFeature&typeNames=' + encodeURIComponent(layer || LAYER) +
-    '&outputFormat=application%2Fjson&srsName=EPSG:4326&CQL_FILTER=' + encodeURIComponent(filter);
-  async function getJSON(u) {
-    const c = new AbortController(), t0 = setTimeout(() => c.abort(), 90000);
-    try {
-      const r = await fetch(u, { signal: c.signal }), t = await r.text();
-      try { return { gj: JSON.parse(t) }; } catch (e) { return { err: t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 160) }; }
-    } catch (e) { return { err: e.name === 'AbortError' ? 'o serviço demorou demasiado' : 'falha de ligação', retry: true }; }
-    finally { clearTimeout(t0); }
-  }
-  async function get(u) { let r; for (let i = 0; i < 3; i++) { r = await getJSON(u); if (!r.retry) return r; await new Promise(z => setTimeout(z, 2000)); } return r; }
-  async function lookup(it) {
-    let err = '';
-    for (const f of ['NPARCELA=' + it.P + ' AND NOSA=' + it.S, 'NPARCELA=' + it.P + " AND NOSA='" + it.S + "'"]) {
-      const r = await get(url(f)); if (r.err) { err = r.err; if (r.retry) break; continue; }
-      if (r.gj.features && r.gj.features.length) return { ok: r.gj };
-    }
-    if (err) return { err };
-    const r = await get(url('NPARCELA=' + it.P, PARC_LAYER));
-    if (r.gj && r.gj.features && r.gj.features.length) return { parcela: r.gj };
-    return { nao: true, err: r.err };
-  }
-
   /* ---------- apresentação ---------- */
   const table = o => '<table class="at">' + Object.entries(o).filter(([k, v]) => v !== '' && v != null).map(([k, v]) => '<tr><td>' + esc(k) + '</td><td>' + esc(cell(v)) + '</td></tr>').join('') + '</table>';
   function mkEl(it) {
@@ -124,7 +98,7 @@
     it.el.className = 'item run'; const t0 = Date.now();
     const id = setInterval(() => { it.el.querySelector('.st').textContent = 'A procurar… ' + Math.round((Date.now() - t0) / 1000) + ' s'; }, 500);
     clearItem(it);
-    let r; try { r = await lookup(it); } catch (e) { r = { err: e.message }; }
+    let r; try { r = await IFAP.lookup(it.P, it.S); } catch (e) { r = { err: e.message }; }
     clearInterval(id); const st = it.el.querySelector('.st');
     if (r.ok) { draw(it, r.ok, false); it.state = 'ok'; it.el.className = 'item ok'; st.textContent = 'Subparcela encontrada'; }
     else if (r.parcela) { draw(it, r.parcela, true); it.state = 'no'; it.el.className = 'item err'; st.textContent = 'A subparcela não existe na camada atual (mostra a parcela inteira)'; }
