@@ -263,6 +263,24 @@ LEFT JOIN cultura c ON c.id = i.cultura_id;`;
   }
   const geomOf = (conn, subId) => { const r = conn.all('SELECT geom, ifap_classe, ifap_grau_cob, ifap_abandono, ifap_data_revisao, ifap_area_m2, ifap_estado FROM subparcela WHERE id=?', [subId])[0]; return r && r.geom ? Object.assign({}, r, { geometry: JSON.parse(r.geom) }) : null; };
 
-  const API = { SCHEMA, ensureSchema, clearAll, importRows, items, counts, aggregate, totals, fromLookup, saveIfap, geomOf, parseNum, isoDate, norm, canonRisk };
+
+  /* =================== REGISTO DAS ALTERAÇÕES (para publicar na nuvem só o que mudou) =================== */
+  const TRACK = [
+    { t: 'tomador', k: 'nif', n: 'NEW.nif' }, { t: 'parcela', k: 'parcela', n: 'NEW.parcela' }, { t: 'cultura', k: 'id', n: 'NEW.id' },
+    { t: 'risco', k: 'id', n: 'NEW.id' }, { t: 'perfil', k: 'id', n: 'NEW.id' },
+    { t: 'perfil_risco', k: "perfil_id || '|' || risco_id", n: "NEW.perfil_id || '|' || NEW.risco_id" },
+    { t: 'adesao', k: 'id', n: 'NEW.id' }, { t: 'subparcela', k: 'id', n: 'NEW.id' }, { t: 'item', k: 'id', n: 'NEW.id' }, { t: 'importacao', k: 'id', n: 'NEW.id' }];
+  function enableTracking(conn) {
+    conn.exec('CREATE TABLE IF NOT EXISTS _alt(t TEXT NOT NULL, k TEXT NOT NULL, PRIMARY KEY(t, k))');
+    TRACK.forEach(x => ['INSERT', 'UPDATE'].forEach(ev => conn.exec(
+      'CREATE TRIGGER IF NOT EXISTS _alt_' + ev.charAt(0).toLowerCase() + '_' + x.t + ' AFTER ' + ev + ' ON ' + x.t +
+      " BEGIN INSERT OR IGNORE INTO _alt(t, k) VALUES('" + x.t + "', CAST(" + x.n + ' AS TEXT)); END;')));
+  }
+  function pendingCount(conn) {
+    try { return conn.all('SELECT COUNT(*) AS n FROM _alt')[0].n; } catch (e) { return 0; }
+  }
+  function clearTouched(conn) { try { conn.exec('DELETE FROM _alt'); } catch (e) {} }
+
+  const API = { TRACK, enableTracking, pendingCount, clearTouched, SCHEMA, ensureSchema, clearAll, importRows, items, counts, aggregate, totals, fromLookup, saveIfap, geomOf, parseNum, isoDate, norm, canonRisk };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.DB = API;
 })(typeof window !== 'undefined' ? window : globalThis);

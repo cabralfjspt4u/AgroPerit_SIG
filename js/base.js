@@ -104,7 +104,7 @@
     return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
   }
   $('fileXls').addEventListener('change', async e => {
-    const files = [...e.target.files]; if (!files.length) return;
+    const files = [...e.target.files]; if (!files.length || !canWrite()) return;
     $('imp').innerHTML = '';
     for (const f of files) {
       let html;
@@ -120,10 +120,12 @@
     e.target.value = '';
     try { await Store.save(); } catch (err) { $('imp').insertAdjacentHTML('beforeend', '<div class="rep"><span style="color:var(--err)">' + esc(err.message) + '</span></div>'); }
     reload();
+    await publish();
   });
 
   /* ---------- polígonos do IFAP (guardados uma vez na base) ---------- */
   $('btnIfap').onclick = async () => {
+    if (!canWrite()) return;
     const retry = $('chkRetry').checked, seen = new Set(), todo = [];
     FIL.forEach(r => { if (seen.has(r.subparcela_id)) return; seen.add(r.subparcela_id); if (!r.ifap_estado || (retry && r.ifap_estado === 'nao_encontrada')) todo.push(r); });
     if (!todo.length) { $('ifapProg').textContent = 'Todas as subparcelas filtradas já foram consultadas no IFAP.'; return; }
@@ -142,6 +144,7 @@
     try { await Store.save(); } catch (e) {}
     $('btnIfap').disabled = false; $('ifapProg').textContent = 'Concluído: ' + (feitas - erros) + ' guardadas' + (erros ? ', ' + erros + ' com falha (clique outra vez para repetir)' : '') + '.';
     reload();
+    await publish();
   };
 
   /* ---------- mapa ---------- */
@@ -215,9 +218,79 @@
     DB.clearAll(conn()); clearMap(); try { await Store.save(); } catch (e) {} $('imp').innerHTML = ''; reload();
   };
 
+  /* ---------- modo nuvem: login por convite, perfis e publicação ---------- */
+  const CLOUD_LINK = /type=(invite|recovery)/.test(location.hash || '');
+  let CLOUD = false, ROLE = 'admin', PUBLISHING = false;
+  function canWrite() { return !CLOUD || ROLE === 'admin'; }
+  function showMsg(t) { const m = $('lgMsg'); m.hidden = !t; m.textContent = t || ''; }
+  function showLogin(mode) { $('login').hidden = false; $('loginForm').hidden = mode === 'pw'; $('pwForm').hidden = mode !== 'pw'; }
+  function applyRole() {
+    const adm = canWrite();
+    $('secImport').hidden = !adm; $('btnIfap').hidden = !adm; $('lblRetry').hidden = !adm;
+    if (CLOUD) {
+      $('secBackup').hidden = !adm; $('lblOpen').hidden = true; $('btnClear').hidden = true; $('nuvem').hidden = false;
+      $('txtBackup').textContent = 'A base está na nuvem (Supabase). Guarde cópias de vez em quando e não as coloque no GitHub: têm dados pessoais.';
+    } else { $('secBackup').hidden = false; $('nuvem').hidden = true; }
+  }
+  async function loadFromCloud() {
+    if (DB.pendingCount(conn()) && !confirm('Há alterações ainda não publicadas que se vão perder. Continuar?')) return;
+    clearMap(); Store.reset(); $('nuvemMsg').textContent = '';
+    try {
+      await Cloud.pull(conn(), (t, n) => { $('dbinfo').textContent = 'A descarregar dados da nuvem… ' + t + ' (' + n + ')'; });
+      $('nuvemMsg').textContent = 'Dados da nuvem carregados às ' + new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) + '.';
+    } catch (e) { $('nuvemMsg').textContent = 'Não foi possível descarregar: ' + e.message; }
+    reload();
+  }
+  async function enterApp() {
+    try {
+      ROLE = await Cloud.role();
+      if (!ROLE) { await Cloud.signOut(); showLogin('login'); showMsg('Esta conta não tem acesso. Peça um convite ao administrador.'); return; }
+      $('login').hidden = true; showMsg(''); applyRole();
+      const s = await Cloud.session();
+      $('nuvemTxt').textContent = ((s && s.user && s.user.email) || '') + ' · ' + (ROLE === 'admin' ? 'administrador (pode carregar dados)' : 'consulta');
+      await loadFromCloud();
+    } catch (e) { showLogin('login'); showMsg('Não foi possível entrar: ' + e.message); }
+  }
+  async function publish() {
+    if (!CLOUD || ROLE !== 'admin' || PUBLISHING) return;
+    const n = DB.pendingCount(conn()); if (!n) return;
+    PUBLISHING = true; $('btnRetryPub').hidden = true; $('nuvemMsg').textContent = 'A publicar ' + n + ' alterações na nuvem…';
+    try { await Cloud.push(conn(), (t, e) => { $('nuvemMsg').textContent = 'A publicar… ' + e + ' de ' + n; }); $('nuvemMsg').textContent = 'Publicado na nuvem. Os outros veem os dados novos quando entrarem ou clicarem em “Atualizar da nuvem”.'; }
+    catch (e) { $('nuvemMsg').textContent = 'Não foi possível publicar: ' + e.message; $('btnRetryPub').hidden = false; }
+    PUBLISHING = false;
+  }
+  $('btnRetryPub').onclick = publish;
+  $('btnSync').onclick = loadFromCloud;
+  $('btnOut').onclick = async () => { await Cloud.signOut(); location.reload(); };
+  $('lgGo').onclick = async () => {
+    const email = $('lgEmail').value.trim(), pass = $('lgPass').value; if (!email || !pass) { showMsg('Escreva o email e a palavra-passe.'); return; }
+    showMsg('A entrar…');
+    try { await Cloud.signIn(email, pass); $('lgPass').value = ''; await enterApp(); } catch (e) { showMsg('Email ou palavra-passe incorretos.'); }
+  };
+  $('lgPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('lgGo').onclick(); });
+  $('lgForgot').onclick = async e => {
+    if (e && e.preventDefault) e.preventDefault();
+    const email = $('lgEmail').value.trim(); if (!email) { showMsg('Escreva primeiro o seu email e clique outra vez.'); return; }
+    try { await Cloud.resetPassword(email); } catch (err) {}
+    showMsg('Se este email fizer parte da equipa, vai receber uma mensagem para definir uma nova palavra-passe.');
+  };
+  $('pwGo').onclick = async () => {
+    const p = $('pwNew').value; if (p.length < 8) { showMsg('A palavra-passe tem de ter pelo menos 8 caracteres.'); return; }
+    if (p !== $('pwNew2').value) { showMsg('As duas palavras-passe não são iguais.'); return; }
+    try { await Cloud.setPassword(p); history.replaceState(null, '', location.pathname); await enterApp(); } catch (e) { showMsg('Não foi possível guardar: ' + e.message); }
+  };
+
   /* ---------- arranque ---------- */
   (async () => {
-    try { await Store.init(); reload(); }
-    catch (e) { $('fatal').hidden = false; $('fatal').textContent = e.message; }
+    try {
+      const cfg = window.AGROPERIT_CONFIG || {};
+      if (cfg.supabaseUrl && cfg.supabaseKey) {
+        if (!Cloud.init(cfg)) throw new Error('Não consegui carregar o serviço de login (precisa de internet).');
+        CLOUD = true; ROLE = null; await Store.initMemory(); applyRole();
+        const s = await Cloud.session();
+        if (s && CLOUD_LINK) { showLogin('pw'); showMsg('Bem-vindo! Defina a sua palavra-passe para continuar.'); }
+        else if (s) await enterApp(); else showLogin('login');
+      } else { await Store.init(); applyRole(); reload(); }
+    } catch (e) { $('fatal').hidden = false; $('fatal').textContent = e.message; }
   })();
 })();

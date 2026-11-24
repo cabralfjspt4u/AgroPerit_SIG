@@ -55,6 +55,14 @@ Guarda **todos** os dados do Excel (tomador, apólice/adesão, parcelas, cultura
 
 Nota técnica: a base usa SQLite no navegador (sql.js, carregado de cdn.jsdelivr.net) e precisa de internet na primeira abertura.
 
+## Base partilhada online (opcional)
+
+Para uma base partilhada por até 5 pessoas (um administrador carrega, os outros consultam), com login só por convite, siga o `PASSO-A-PASSO-SUPABASE.md`. Traz:
+
+- `sql/supabase-setup.sql`: cria as tabelas e as regras de segurança (quem não tem login não vê nada; só o `admin` escreve).
+- `js/config.js`: onde se cola o URL e a chave do Supabase. Se ficar vazio, o site funciona só no computador, como antes.
+- `.github/workflows/manter-ativo.yml`: rotina que acorda a base de 2 em 2 dias para o Supabase não a pausar.
+
 ## Abrir no Google My Maps
 
 1. Em **mymaps.google.com**, inicie sessão e clique em **Criar um novo mapa**.

@@ -12,6 +12,26 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="base">
+<div id="login" hidden>
+  <div class="card">
+    <img class="logo logo-light" src="assets/logo.png" alt="AGROPERIT">
+    <img class="logo logo-dark" src="assets/logo-branco.png" alt="AGROPERIT">
+    <h1 class="brand"><span class="a">AGRO</span><span class="p">PERIT</span> <span class="sub">Parcelário</span></h1>
+    <div id="loginForm">
+      <p class="muted">Acesso só por convite.</p>
+      <label class="muted" for="lgEmail">Email</label><input id="lgEmail" type="email" autocomplete="username">
+      <label class="muted" for="lgPass">Palavra-passe</label><input id="lgPass" type="password" autocomplete="current-password">
+      <button id="lgGo" class="btn" type="button">Entrar</button>
+      <a href="#" id="lgForgot" class="muted">Esqueci-me da palavra-passe</a>
+    </div>
+    <div id="pwForm" hidden>
+      <label class="muted" for="pwNew">Nova palavra-passe (mínimo 8 caracteres)</label><input id="pwNew" type="password" autocomplete="new-password">
+      <label class="muted" for="pwNew2">Repita a palavra-passe</label><input id="pwNew2" type="password" autocomplete="new-password">
+      <button id="pwGo" class="btn" type="button">Guardar palavra-passe</button>
+    </div>
+    <div id="lgMsg" class="aviso" hidden></div>
+  </div>
+</div>
 <div id="app">
   <aside id="side">
     <div class="top">
@@ -22,11 +42,20 @@
     <nav class="nav"><a href="index.html">Mapa rápido</a><a class="on" href="base.html">Base de dados</a></nav>
     <h1 class="brand"><span class="a">AGRO</span><span class="p">PERIT</span> <span class="sub">Parcelário</span></h1>
     <div id="fatal" class="aviso" hidden></div>
+    <div id="nuvem" class="cloudbar" hidden>
+      <div id="nuvemTxt"></div>
+      <div id="nuvemMsg" class="muted"></div>
+      <button id="btnSync" class="btn ghost" type="button">Atualizar da nuvem</button>
+      <button id="btnRetryPub" class="btn" type="button" hidden>Publicar outra vez</button>
+      <button id="btnOut" class="btn ghost" type="button">Terminar sessão</button>
+    </div>
 
+    <div id="secImport">
     <h2>1. Importar Excel</h2>
     <p class="muted">Pode escolher vários ficheiros. O que já existe não é repetido; o que for novo é acrescentado; o que mudou é atualizado.</p>
     <label class="btn">Escolher Excel(s)<input id="fileXls" type="file" accept=".xlsx,.xls,.xlsm,.csv" multiple></label>
     <div id="imp"></div>
+    </div>
 
     <h2>2. Consultar</h2>
     <label class="muted" for="fTom">Tomador (nome ou NIF)</label>
@@ -38,7 +67,7 @@
 
     <h2>3. Mapa e exportação</h2>
     <div id="ifapInfo" class="muted"></div>
-    <label class="check"><input id="chkRetry" type="checkbox"> Voltar a tentar as que o IFAP não encontrou</label>
+    <label class="check" id="lblRetry"><input id="chkRetry" type="checkbox"> Voltar a tentar as que o IFAP não encontrou</label>
     <div class="actions">
       <button id="btnIfap" class="btn" type="button">Obter polígonos do IFAP</button>
       <button id="btnMap" class="btn ghost" type="button">Mostrar no mapa</button>
@@ -52,14 +81,16 @@
       <button id="btnCsv" class="btn ghost" type="button">Tabela para Excel (CSV)</button>
     </div>
 
+    <div id="secBackup">
     <h2>Cópia de segurança</h2>
     <div id="dbinfo" class="muted"></div>
-    <p class="muted">A base fica guardada neste navegador. Guarde uma cópia de vez em quando e <b>não a coloque no GitHub</b>: tem dados pessoais.</p>
+    <p id="txtBackup" class="muted">A base fica guardada neste navegador. Guarde uma cópia de vez em quando e <b>não a coloque no GitHub</b>: tem dados pessoais.</p>
     <div class="actions">
       <button id="btnSave" class="btn" type="button">Guardar cópia compactada</button>
       <button id="btnSaveRaw" class="btn ghost" type="button">Guardar cópia normal</button>
-      <label class="btn ghost">Abrir cópia<input id="fileDb" type="file" accept=".sqlite,.gz,.db"></label>
+      <label class="btn ghost" id="lblOpen">Abrir cópia<input id="fileDb" type="file" accept=".sqlite,.gz,.db"></label>
       <button id="btnClear" class="btn ghost danger" type="button">Apagar tudo</button>
+    </div>
     </div>
 
     <p class="foot muted">AGROPERIT – Peritagens &amp; Avaliações · LEADERGREF LDA<br>
@@ -81,10 +112,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/ifap.js"></script>
 <script src="js/db.js"></script>
 <script src="js/store.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/base.js"></script>
 </body>
 </html>

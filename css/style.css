@@ -82,3 +82,13 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 #imp .rep ul{margin:4px 0 0;padding-left:18px;color:var(--err)}
 #imp details{margin-top:4px}
 @media(max-width:760px){body.base #main{height:92vh;grid-template-rows:minmax(0,45%) minmax(0,1fr)}body.base #map{height:100%}}
+
+/* ---------- login e barra da nuvem ---------- */
+#login{position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+#login[hidden]{display:none}
+#login .card{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;text-align:center}
+#login input{font:inherit;width:100%;padding:8px;margin:2px 0 10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px}
+#login label{display:block;text-align:left}
+#login a{display:block;margin-top:10px;text-decoration:underline;cursor:pointer}
+.cloudbar{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;font-size:12.5px}
+.cloudbar #nuvemTxt{font-weight:600}

@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const CDN = 'https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/';
-  let SQL = null, db = null;
+  let SQL = null, db = null, persist = true;
   const info = { raw: 0, gz: 0, em: null, guardadoNoNavegador: false };
 
   const conn = {
@@ -43,11 +43,18 @@
   }
 
   async function save() {
+    if (!persist) return;
     const raw = db.export(); const gz = await gzip(raw);
     info.raw = raw.length; info.gz = gz.length; info.em = new Date();
     try { await kv('readwrite', s => s.put({ bytes: gz, em: info.em.toISOString() }, 'bd')); info.guardadoNoNavegador = true; }
     catch (e) { info.guardadoNoNavegador = false; throw new Error('Não foi possível guardar no navegador. Guarde uma cópia em ficheiro.'); }
   }
+
+  async function initMemory() {            // modo nuvem: nada fica guardado no navegador
+    if (typeof initSqlJs === 'undefined') throw new Error('Não consegui carregar o motor da base de dados (precisa de internet).');
+    SQL = await initSqlJs({ locateFile: f => CDN + f }); persist = false; reset();
+  }
+  function reset() { try { if (db) db.close(); } catch (e) {} db = new SQL.Database(); DB.ensureSchema(conn); }
 
   async function fileBytes(compressed) {
     db.exec('VACUUM'); const raw = db.export();
@@ -65,5 +72,5 @@
     await save();
   }
 
-  root.Store = { init, save, fileBytes, openFile, conn, info };
+  root.Store = { init, initMemory, reset, save, fileBytes, openFile, conn, info };
 })(typeof window !== 'undefined' ? window : globalThis);
