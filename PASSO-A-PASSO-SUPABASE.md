@@ -37,7 +37,7 @@ on conflict (email) do update set papel = excluded.papel;
 1. Em **Authentication → Users**, clique em **Add user → Create new user**.
 2. Escreva o email e uma palavra-passe provisória. Marque **Auto Confirm User**. Clique em **Create user**.
 3. Repita para cada pessoa. Entregue a cada uma o email e a palavra-passe provisória por um meio seguro. Cada pessoa pode depois mudar a sua com "Esqueci-me da palavra-passe".
-4. (Alternativa: **Invite user** envia um email com um link para a pessoa definir a palavra-passe. Precisa do passo 6.)
+4. Use sempre **Create new user** com palavra-passe. Evite **Invite user**: depende de o Supabase conseguir enviar emails, o que no plano gratuito muitas vezes **não funciona** (ver “Problemas comuns”). Uma conta só “convidada” não tem palavra-passe e dá sempre “palavra-passe incorreta”.
 
 **6. Indicar o endereço do site**
 1. Em **Authentication → URL Configuration**, em **Site URL**, escreva o endereço do seu site (por exemplo `https://O-SEU-UTILIZADOR.github.io/agroperit-parcelario/`) e grave.
@@ -68,6 +68,23 @@ Nota: o GitHub desliga rotinas agendadas em repositórios públicos sem atividad
 - **Os outros:** entram e veem os dados. Para ver os dados mais recentes clicam em **Atualizar da nuvem**.
 - **Terminar sessão** apaga os dados da memória do navegador. Nada fica guardado no computador de quem consulta.
 - **Se o administrador mudar de computador:** não há problema, a base está na nuvem.
+
+## Problemas comuns
+
+**“Email ou palavra-passe incorretos”**
+1. Confirme o email (sem espaços) e escreva a palavra-passe à mão em vez de copiar e colar (colar pode trazer um espaço no fim).
+2. Em **Authentication → Users**, veja se a conta existe. Se foi criada por **Invite user**, ou se não está confirmada, apague-a e crie-a de novo com **Create new user** e **Auto Confirm User** marcado.
+3. Confirme que o `js/config.js` tem o URL e a chave **anon / public** do **mesmo** projeto.
+4. A página mostra agora o motivo verdadeiro por baixo do botão **Entrar**. Se for outro motivo, siga o que ela diz.
+
+**Repor a palavra-passe de alguém (sem depender de email)**
+1. **Authentication → Users**, clique nos três pontos da linha da pessoa e em **Delete user**.
+2. **Add user → Create new user**: o mesmo email, uma nova palavra-passe provisória e **Auto Confirm User** marcado. A pessoa continua na lista `equipa` (a ligação é pelo email).
+
+**“Não recebo o email de recuperação / de convite”**
+O serviço de email que vem de origem no Supabase é só para testes: tem um limite muito baixo de mensagens por hora e, nos projetos novos, só envia para endereços de membros da sua organização no Supabase. Por isso as pessoas convidadas normalmente não recebem nada. Duas saídas:
+- **A mais simples (recomendada para 5 pessoas):** não usar email. O administrador cria as contas e repõe palavras-passe como acima.
+- **Mais completa:** ligar um serviço próprio de envio de emails (em **Authentication → Emails → SMTP Settings**, com um fornecedor de email transacional). Exige criar conta nesse fornecedor e validar o domínio ou o remetente. Se quiser, ajudo a escolher e a configurar.
 
 ## Retirar ou acrescentar pessoas
 - **Retirar:** no **SQL Editor** execute `delete from public.equipa where email = 'pessoa@email.pt';` e apague a conta em **Authentication → Users**.

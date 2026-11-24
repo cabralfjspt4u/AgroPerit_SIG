@@ -262,17 +262,35 @@
   $('btnRetryPub').onclick = publish;
   $('btnSync').onclick = loadFromCloud;
   $('btnOut').onclick = async () => { await Cloud.signOut(); location.reload(); };
+  function motivoLogin(e) {
+    const m = String((e && e.message) || '').toLowerCase();
+    if (m.includes('invalid login credentials')) return 'Email ou palavra-passe incorretos. Confirme que não há espaços e que a conta foi criada no Supabase com “Create new user” e “Auto Confirm User” marcado (contas só “convidadas” não têm palavra-passe).';
+    if (m.includes('email not confirmed')) return 'A conta ainda não está confirmada. No Supabase, em Authentication → Users, apague este utilizador e crie-o de novo com “Auto Confirm User” marcado.';
+    if (m.includes('invalid api key') || m.includes('apikey')) return 'A chave do Supabase no ficheiro js/config.js não está correta (use a chave “anon / public” do mesmo projeto).';
+    if (m.includes('failed to fetch') || m.includes('network') || m.includes('load failed')) return 'Não consegui ligar ao Supabase. Verifique a internet e o endereço (URL) em js/config.js. O projeto também pode estar em pausa.';
+    if (m.includes('rate limit') || m.includes('too many')) return 'Demasiadas tentativas seguidas. Espere alguns minutos e tente de novo.';
+    return 'Não foi possível entrar: ' + ((e && e.message) || 'erro desconhecido');
+  }
+  function motivoReset(e) {
+    const m = String((e && e.message) || '').toLowerCase();
+    if (m.includes('not authorized') || m.includes('not_authorized')) return 'O serviço de email gratuito do Supabase só envia para membros da organização. Peça ao administrador para repor a sua palavra-passe.';
+    if (m.includes('rate limit') || m.includes('too many') || m.includes('seconds')) return 'Foi atingido o limite de emails do Supabase. Tente daqui a uma hora ou peça ao administrador para repor a sua palavra-passe.';
+    return 'Não foi possível enviar o email: ' + ((e && e.message) || 'erro desconhecido') + '. Peça ao administrador para repor a sua palavra-passe.';
+  }
   $('lgGo').onclick = async () => {
     const email = $('lgEmail').value.trim(), pass = $('lgPass').value; if (!email || !pass) { showMsg('Escreva o email e a palavra-passe.'); return; }
     showMsg('A entrar…');
-    try { await Cloud.signIn(email, pass); $('lgPass').value = ''; await enterApp(); } catch (e) { showMsg('Email ou palavra-passe incorretos.'); }
+    try { await Cloud.signIn(email, pass); } catch (e) { showMsg(motivoLogin(e)); return; }
+    $('lgPass').value = ''; await enterApp();
   };
   $('lgPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('lgGo').onclick(); });
   $('lgForgot').onclick = async e => {
     if (e && e.preventDefault) e.preventDefault();
     const email = $('lgEmail').value.trim(); if (!email) { showMsg('Escreva primeiro o seu email e clique outra vez.'); return; }
-    try { await Cloud.resetPassword(email); } catch (err) {}
-    showMsg('Se este email fizer parte da equipa, vai receber uma mensagem para definir uma nova palavra-passe.');
+    showMsg('A enviar o pedido…');
+    try { await Cloud.resetPassword(email); }
+    catch (err) { showMsg(motivoReset(err)); return; }
+    showMsg('Pedido enviado. Se este email fizer parte da equipa, deve receber uma mensagem em poucos minutos (veja também o spam). Se não chegar, peça ao administrador para repor a palavra-passe.');
   };
   $('pwGo').onclick = async () => {
     const p = $('pwNew').value; if (p.length < 8) { showMsg('A palavra-passe tem de ter pelo menos 8 caracteres.'); return; }
