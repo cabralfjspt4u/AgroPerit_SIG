@@ -29,7 +29,7 @@
   /* ---------- colunas da tabela de subparcelas ---------- */
   const COLS = [
     { k: 'tomador', t: 'Tomador' }, { k: 'apolice', t: 'Apólice', f: r => r.apolice + ' / ' + r.adesao_n },
-    { k: 'parcela', t: 'Parcela / Sub.', f: r => r.parcela + ' / ' + r.nosa }, { k: 'concelho', t: 'Concelho' }, { k: 'cultura', t: 'Cultura' },
+    { k: 'parcela', t: 'Parcela / Sub.', f: r => r.parcela + ' / ' + (r.sub_ref || r.nosa) }, { k: 'concelho', t: 'Concelho' }, { k: 'cultura', t: 'Cultura' },
     { k: 'ha', t: 'Ha', n: 1, f: r => nf(r.ha, 4) }, { k: 'prod_kg_ha', t: 'Prod. (kg/ha)', n: 1, f: r => nf(r.prod_kg_ha, 2) },
     { k: 'preco_eur_kg', t: 'Preço (€/kg)', n: 1, f: r => nf(r.preco_eur_kg, 3) }, { k: 'producao_kg', t: 'Produção (kg)', n: 1, f: r => nf(r.producao_kg, 0) },
     { k: 'capital_eur', t: 'Capital (€)', n: 1, f: r => nf(r.capital_eur, 2) }, { k: 'ifap_estado', t: 'Polígono', f: r => r.ifap_estado === 'subparcela' ? '✓' : r.ifap_estado === 'parcela_inteira' ? 'parcela' : r.ifap_estado ? '✗' : '' }
@@ -48,7 +48,7 @@
     const c = DB.counts(conn()), i = Store.info;
     $('dbinfo').textContent = c.itens ? c.tomadores + ' tomador(es) · ' + c.adesoes + ' adesão(ões) · ' + c.subparcelas + ' subparcela(s) · ' + c.com_poligono + ' com polígono'
       + (i.raw ? ' · base: ' + nf(i.raw / 1024, 1) + ' KB (compactada: ' + nf(i.gz / 1024, 1) + ' KB)' : '') : 'A base está vazia. Comece por importar um Excel.';
-    applyFilters();
+    applyFilters(); renderArquivo();
   }
   function applyFilters() {
     const q = DB.norm($('fTom').value), c = $('fCult').value, co = $('fConc').value, ap = $('fApol').value;
@@ -81,13 +81,15 @@
     } else {
       const rows = FIL.slice().sort((a, b) => { const x = a[sortKey], y = b[sortKey]; return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x == null ? '' : x).localeCompare(String(y == null ? '' : y), 'pt')) * sortDir; });
       const MAX = 500;
-      $('tbl').innerHTML = '<table class="t"><tr>' + COLS.map(c => '<th data-sort="' + c.k + '" class="' + (c.n ? 'n' : '') + '">' + c.t + (sortKey === c.k ? (sortDir > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr>' +
-        rows.slice(0, MAX).map(r => '<tr data-id="' + r.id + '">' + COLS.map(c => '<td class="' + (c.n ? 'n' : '') + '">' + esc(c.f ? c.f(r) : r[c.k]) + '</td>').join('') + '</tr>').join('') +
+      $('tbl').innerHTML = '<table class="t"><tr>' + COLS.map(c => '<th data-sort="' + c.k + '" class="' + (c.n ? 'n' : '') + '">' + c.t + (sortKey === c.k ? (sortDir > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + (canWrite() ? '<th></th>' : '') + '</tr>' +
+        rows.slice(0, MAX).map(r => '<tr data-id="' + r.id + '">' + COLS.map(c => '<td class="' + (c.n ? 'n' : '') + '">' + esc(c.f ? c.f(r) : r[c.k]) + '</td>').join('') + (canWrite() ? '<td class="act"><button class="mini" type="button" data-act="arq" data-id="' + r.id + '">ocultar</button><button class="mini danger" type="button" data-act="del" data-id="' + r.id + '">apagar</button></td>' : '') + '</tr>').join('') +
         '</table>' + (rows.length > MAX ? '<div class="note">A mostrar ' + MAX + ' de ' + rows.length + ' linhas. Use os filtros para ver as restantes (o CSV leva todas).</div>' : '');
     }
   }
   $('tbl').onclick = e => {
-    const t = e.target, th = t.closest && t.closest('th[data-sort]');
+    const t = e.target, ab = t.closest && t.closest('button[data-act]');
+    if (ab) { const id = Number(ab.getAttribute('data-id')); if (ab.getAttribute('data-act') === 'arq') doArchive([id]); else doDelete([id]); return; }
+    const th = t.closest && t.closest('th[data-sort]');
     if (th) { const k = th.getAttribute('data-sort'); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } render(); return; }
     const tr = t.closest && t.closest('tr[data-k],tr[data-id]'); if (!tr) return;
     if (tr.getAttribute('data-k') != null) {
@@ -99,6 +101,14 @@
   };
 
   /* ---------- importar Excel ---------- */
+  const IGN = [];
+  $('imp').onclick = e => {
+    const bt = e.target.closest && e.target.closest('button[data-ign]'); if (!bt) return;
+    const g = IGN[Number(bt.getAttribute('data-ign'))]; if (!g) return;
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', cols = ['Tomador', 'NIF', 'Apólice', 'Adesão', 'Parcela', 'Subparcela', 'Cultura', 'Ha', 'Capital (objeto)'];
+    const linhas = [['Linha', 'Falta'].concat(cols).map(q).join(';')].concat(g.lista.map(x => [x.linha, x.falta].concat(cols.map(c => x.valores[c])).map(q).join(';')));
+    download('linhas-ignoradas.csv', '\ufeff' + linhas.join('\r\n'), 'text/csv;charset=utf-8');
+  };
   function pickSheet(wb) {
     for (const n of wb.SheetNames) { const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: '', raw: true, range: 0 }); if (rows.length && Object.keys(rows[0]).some(h => DB.norm(h) === 'APOLICE')) return rows; }
     return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
@@ -110,8 +120,15 @@
       let html;
       try {
         const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
-        const rep = DB.importRows(conn(), pickSheet(wb), f.name);
-        html = '<div class="rep"><b>' + esc(f.name) + '</b>' + rep.linhas + ' linhas lidas: <b style="display:inline">' + rep.novos + ' novas</b>, ' + rep.atualizados + ' atualizadas, ' + rep.iguais + ' já existiam' + (rep.ignoradas ? ', ' + rep.ignoradas + ' ignoradas' : '') + '.' +
+        const rep = DB.importRows(conn(), pickSheet(wb), f.name, { preencherAcima: $('chkFill').checked });
+        const ign = rep.linhasIgnoradas.length ? IGN.push({ nome: f.name, lista: rep.linhasIgnoradas }) - 1 : -1;
+        html = '<div class="rep"><b>' + esc(f.name) + '</b>' + rep.linhas + ' linhas lidas: <b style="display:inline">' + rep.novos + ' novas</b>, ' + rep.atualizados + ' atualizadas, ' + rep.iguais + ' já existiam' + (rep.ignoradas ? ', <b style="display:inline;color:var(--err)">' + rep.ignoradas + ' ignoradas</b>' : '') + (rep.vazias ? ', ' + rep.vazias + ' linhas vazias saltadas' : '') + '.' +
+          (rep.grupos.length ? '<div>' + esc(rep.grupos.join(' ')) + '</div>' : '') +
+          (rep.semAdesao ? '<div>' + rep.semAdesao + ' linhas importadas sem nº de adesão (apólices individuais): ficam como “sem nº” + NIF.</div>' : '') +
+          (rep.incompletas.length ? '<details><summary>' + rep.incompletas.length + ' linhas importadas com campos em falta</summary>' + rep.incompletas.slice(0, 30).map(m => '<div>' + esc(m) + '</div>').join('') + '</details>' : '') +
+          (rep.arquivadas ? '<div>' + rep.arquivadas + ' linhas já estavam no arquivo-morto e ficaram como estão.</div>' : '') +
+          (rep.completadas.length ? '<details><summary>' + rep.completadas.length + ' linhas completadas com a linha de cima</summary>' + rep.completadas.slice(0, 30).map(m => '<div>' + esc(m) + '</div>').join('') + '</details>' : '') +
+          (ign >= 0 ? '<details open><summary>Ver as ' + rep.linhasIgnoradas.length + ' linhas ignoradas</summary><table class="at"><tr><td>Linha</td><td>Falta</td><td>Conteúdo da linha</td></tr>' + rep.linhasIgnoradas.slice(0, 40).map(x => '<tr><td>' + x.linha + '</td><td>' + esc(x.falta) + '</td><td>' + esc(Object.entries(x.valores).filter(([k, v]) => v !== '').map(([k, v]) => k + ': ' + v).join(' · ') || '(linha sem dados)') + '</td></tr>').join('') + '</table>' + (rep.linhasIgnoradas.length > 40 ? '<div>… e mais ' + (rep.linhasIgnoradas.length - 40) + ' (estão no CSV).</div>' : '') + '<button class="btn ghost" type="button" data-ign="' + ign + '">Descarregar linhas ignoradas (CSV)</button></details>' : '') +
           (rep.avisos.length ? '<ul>' + rep.avisos.slice(0, 8).map(a => '<li>' + esc(a) + '</li>').join('') + (rep.avisos.length > 8 ? '<li>… e mais ' + (rep.avisos.length - 8) + ' avisos.</li>' : '') + '</ul>' : '') +
           (rep.mudancas.length ? '<details><summary>Ver o que foi atualizado (' + rep.mudancas.length + ')</summary>' + rep.mudancas.slice(0, 40).map(m => '<div>' + esc(m) + '</div>').join('') + '</details>' : '') + '</div>';
       } catch (err) { html = '<div class="rep"><b>' + esc(f.name) + '</b><span style="color:var(--err)">Não foi possível importar: ' + esc(err.message) + '</span></div>'; }
@@ -150,11 +167,11 @@
   /* ---------- mapa ---------- */
   const colorOf = r => { const keys = [...new Set(ALL.map(x => x.cultura || ''))].sort(); return GEO.colorFor(Math.max(0, keys.indexOf(r.cultura || ''))); };
   function popupHtml(r, g) {
-    const rows = [['Tomador', r.tomador], ['NIF', r.nif], ['Apólice / adesão', r.apolice + ' / ' + r.adesao_n], ['Parcela / sub.', r.parcela + ' / ' + r.nosa], ['Concelho', r.concelho], ['Cultura', r.cultura],
+    const rows = [['Tomador', r.tomador], ['NIF', r.nif], ['Apólice / adesão', r.apolice + ' / ' + r.adesao_n], ['Parcela / sub.', r.parcela + ' / ' + (r.sub_ref || r.nosa)], ['Concelho', r.concelho], ['Cultura', r.cultura],
       ['Ha (seguro)', nf(r.ha, 4)], ['Produtividade (kg/ha)', nf(r.prod_kg_ha, 2)], ['Preço (€/kg)', nf(r.preco_eur_kg, 3)], ['Produção (kg)', nf(r.producao_kg, 0)], ['Capital (€)', nf(r.capital_eur, 2)],
       ['IFAP: classe', g.ifap_classe], ['IFAP: grau de cobertura', g.ifap_grau_cob], ['IFAP: abandono', g.ifap_abandono], ['IFAP: área (ha)', g.ifap_area_m2 ? nf(g.ifap_area_m2 / 10000, 4) : ''],
       ['IFAP: polígono', g.ifap_estado === 'parcela_inteira' ? 'parcela inteira (subparcela não encontrada)' : '']];
-    return '<div class="pop"><b>' + esc(r.parcela + ' / ' + r.nosa) + '</b><table class="at">' + rows.filter(x => x[1] !== '' && x[1] != null).map(x => '<tr><td>' + esc(x[0]) + '</td><td>' + esc(x[1]) + '</td></tr>').join('') + '</table></div>';
+    return '<div class="pop"><b>' + esc(r.parcela + ' / ' + (r.sub_ref || r.nosa)) + '</b><table class="at">' + rows.filter(x => x[1] !== '' && x[1] != null).map(x => '<tr><td>' + esc(x[0]) + '</td><td>' + esc(x[1]) + '</td></tr>').join('') + '</table></div>';
   }
   function drawItem(r) {
     if (drawn.has(r.subparcela_id)) return drawn.get(r.subparcela_id);
@@ -162,7 +179,7 @@
     const color = colorOf(r), feat = { type: 'Feature', properties: {}, geometry: g.geometry };
     const layer = L.geoJSON(feat, { style: { color, weight: 3, fillOpacity: .15 } }).bindPopup(popupHtml(r, g)); group.addLayer(layer);
     const pt = GEO.labelPoint([feat]); let marker = null;
-    if (pt) { marker = L.circleMarker([pt[1], pt[0]], { radius: 6, color: '#ffffff', weight: 2, fillColor: color, fillOpacity: 1 }).bindTooltip(r.parcela + ' / ' + r.nosa); marker.on('click', () => layer.openPopup(marker.getLatLng())); ptGroup.addLayer(marker); }
+    if (pt) { marker = L.circleMarker([pt[1], pt[0]], { radius: 6, color: '#ffffff', weight: 2, fillColor: color, fillOpacity: 1 }).bindTooltip(r.parcela + ' / ' + (r.sub_ref || r.nosa)); marker.on('click', () => layer.openPopup(marker.getLatLng())); ptGroup.addLayer(marker); }
     const o = { layer, marker, feat, pt, color }; drawn.set(r.subparcela_id, o); return o;
   }
   function clearMap() { group.clearLayers(); ptGroup.clearLayers(); drawn.clear(); }
@@ -185,9 +202,9 @@
   $('btnKml').onclick = () => {
     const seen = new Set(), list = [];
     FIL.forEach(r => {
-      if (seen.has(r.subparcela_id) || r.ifap_estado === 'nao_encontrada' || !r.ifap_estado) return; seen.add(r.subparcela_id);
+      if (seen.has(r.id) || r.ifap_estado === 'nao_encontrada' || !r.ifap_estado) return; seen.add(r.id);
       const g = DB.geomOf(conn(), r.subparcela_id); if (!g) return; const feat = { type: 'Feature', properties: {}, geometry: g.geometry };
-      list.push({ name: r.parcela + '/' + r.nosa, features: [feat], pt: GEO.labelPoint([feat]), color: colorOf(r), attrs: {
+      list.push({ name: r.parcela + '/' + (r.sub_ref || r.nosa), features: [feat], pt: GEO.labelPoint([feat]), color: colorOf(r), attrs: {
         Tomador: r.tomador, NIF: r.nif, Apolice: r.apolice, Adesao: r.adesao_n, Inicio: r.inicio, Parcela: r.parcela, Subparcela: r.nosa, Concelho: r.concelho, Cultura: r.cultura,
         Ha: r.ha, 'Produtividade_kg_ha': r.prod_kg_ha, 'Preco_eur_kg': r.preco_eur_kg, 'Producao_kg': r.producao_kg == null ? '' : r.producao_kg.toFixed(0), 'Capital_eur': r.capital_eur == null ? '' : r.capital_eur.toFixed(2),
         IFAP_classe: g.ifap_classe, IFAP_grau_cob: g.ifap_grau_cob, IFAP_abandono: g.ifap_abandono, IFAP_area_ha: g.ifap_area_m2 ? (g.ifap_area_m2 / 10000).toFixed(4) : '',
@@ -199,7 +216,7 @@
   $('btnCsv').onclick = () => {
     const cols = COLS.filter(c => c.k !== 'ifap_estado'), head = ['Tomador', 'NIF', 'Apólice', 'Adesão', 'Início', 'Parcela', 'Subparcela', 'Concelho', 'Cultura', 'Ha', 'Produtividade (kg/ha)', 'Preço (€/kg)', 'Produção (kg)', 'Capital (€)', 'Polígono IFAP'];
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', n = (v, d) => v == null ? '' : Number(v).toFixed(d).replace('.', ',');
-    const lines = [head.map(q).join(';')].concat(FIL.map(r => [q(r.tomador), q(r.nif), q(r.apolice), q(r.adesao_n), q(r.inicio), q(r.parcela), r.nosa, q(r.concelho), q(r.cultura), n(r.ha, 4), n(r.prod_kg_ha, 2), n(r.preco_eur_kg, 3), n(r.producao_kg, 0), n(r.capital_eur, 2), q(r.ifap_estado || '')].join(';')));
+    const lines = [head.map(q).join(';')].concat(FIL.map(r => [q(r.tomador), q(r.nif), q(r.apolice), q(r.adesao_n), q(r.inicio), q(r.parcela), q(r.sub_ref || r.nosa), q(r.concelho), q(r.cultura), n(r.ha, 4), n(r.prod_kg_ha, 2), n(r.preco_eur_kg, 3), n(r.producao_kg, 0), n(r.capital_eur, 2), q(r.ifap_estado || '')].join(';')));
     void cols; download('agroperit-subparcelas.csv', '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   };
 
@@ -213,9 +230,60 @@
     catch (err) { $('imp').innerHTML = '<div class="rep"><span style="color:var(--err)">' + esc(err.message) + '</span></div>'; }
     e.target.value = '';
   });
-  $('btnClear').onclick = async () => {
-    if (!confirm('Apagar TODOS os dados da base neste navegador? Guarde antes uma cópia, se precisar.')) return;
-    DB.clearAll(conn()); clearMap(); try { await Store.save(); } catch (e) {} $('imp').innerHTML = ''; reload();
+  /* ---------- gerir dados: arquivar (ocultar), apagar de vez e apagar tudo (só administrador) ---------- */
+  function resumoIds(ids) {
+    const s = new Set(ids), l = ALL.filter(r => s.has(r.id)), t = DB.totals(l);
+    return l.length + ' subparcela(s) de ' + new Set(l.map(r => r.nif)).size + ' tomador(es), ' + nf(t.ha, 2) + ' ha, capital ' + nf(t.capital, 2) + ' €';
+  }
+  async function depoisDeAlterar(msg) {
+    clearMap(); try { await Store.save(); } catch (e) {}
+    reload(); $('gerirMsg').textContent = msg; await publish();
+  }
+  async function doArchive(ids) {
+    if (!canWrite()) return; if (!ids.length) { $('gerirMsg').textContent = 'Não há subparcelas mostradas para arquivar.'; return; }
+    if (!confirm('Arquivar (ocultar) ' + resumoIds(ids) + '?\n\nDeixam de aparecer em tudo (tabelas, mapa, totais e exportações)' + (CLOUD ? ', para todos os utilizadores' : '') + '. Ficam guardadas no arquivo-morto e podem ser restauradas.')) return;
+    const n = DB.archive(conn(), ids); await depoisDeAlterar(n + ' subparcela(s) arquivada(s). Já não aparecem.');
+  }
+  async function doDelete(ids) {
+    if (!canWrite()) return; if (!ids.length) { $('gerirMsg').textContent = 'Não há subparcelas mostradas para apagar.'; return; }
+    const r = prompt('Vai APAGAR DE VEZ ' + resumoIds(ids) + (CLOUD ? ', também na nuvem' : '') + '. Não dá para desfazer.\n\nPara confirmar escreva APAGAR:');
+    if ((r || '').trim().toUpperCase() !== 'APAGAR') { $('gerirMsg').textContent = 'Cancelado: nada foi apagado.'; return; }
+    const n = DB.deleteItems(conn(), ids); await depoisDeAlterar(n + ' subparcela(s) apagada(s) de vez.');
+  }
+  $('btnArq').onclick = () => doArchive(FIL.map(r => r.id));
+  $('btnDel').onclick = () => doDelete(FIL.map(r => r.id));
+  function renderArquivo() {
+    if (!canWrite()) return;
+    const arq = DB.archivedItems(conn()), ag = DB.aggregate(arq, r => r.nif, r => r.tomador).sort((a, b) => a.label.localeCompare(b.label, 'pt'));
+    $('arqInfo').textContent = arq.length ? arq.length + ' subparcela(s) arquivada(s), de ' + ag.length + ' tomador(es). Não aparecem em mais nenhum sítio.' : 'O arquivo-morto está vazio.';
+    $('arqList').innerHTML = ag.map(a => '<div class="item"><span><b>' + esc(a.label) + '</b>' + a.n + ' subparcela(s) · ' + nf(a.ha, 2) + ' ha</span><button class="mini" type="button" data-rest="' + esc(a.key) + '">Restaurar</button></div>').join('');
+    $('btnRestAll').hidden = !arq.length; $('btnPurge').hidden = !arq.length;
+  }
+  $('arqList').onclick = async e => {
+    const bt = e.target.closest && e.target.closest('button[data-rest]'); if (!bt || !canWrite()) return;
+    const k = bt.getAttribute('data-rest'), ids = DB.archivedItems(conn()).filter(r => r.nif === k).map(r => r.id);
+    DB.restore(conn(), ids); await depoisDeAlterar(ids.length + ' subparcela(s) restaurada(s).');
+  };
+  $('btnRestAll').onclick = async () => {
+    if (!canWrite()) return; const ids = DB.archivedItems(conn()).map(r => r.id); if (!ids.length) return;
+    if (!confirm('Restaurar as ' + ids.length + ' subparcelas do arquivo-morto? Voltam a aparecer' + (CLOUD ? ' para todos' : '') + '.')) return;
+    DB.restore(conn(), ids); await depoisDeAlterar(ids.length + ' subparcela(s) restaurada(s).');
+  };
+  $('btnPurge').onclick = async () => {
+    if (!canWrite()) return; const ids = DB.archivedItems(conn()).map(r => r.id); if (!ids.length) return;
+    const r = prompt('Vai APAGAR DE VEZ as ' + ids.length + ' subparcelas do arquivo-morto' + (CLOUD ? ', também na nuvem' : '') + '. Não dá para desfazer.\n\nPara confirmar escreva APAGAR:');
+    if ((r || '').trim().toUpperCase() !== 'APAGAR') return;
+    DB.deleteItems(conn(), ids); await depoisDeAlterar('Arquivo apagado de vez.');
+  };
+  $('btnWipe').onclick = async () => {
+    if (!canWrite()) return;
+    const n = DB.counts(conn()).itens + DB.archivedItems(conn()).length;
+    const r = prompt('Vai apagar TODOS os dados (' + n + ' subparcelas, incluindo o arquivo-morto e os polígonos)' + (CLOUD ? ', também na nuvem e para todos' : ' deste navegador') + '. Não dá para desfazer. Se precisar, guarde antes uma cópia.\n\nPara confirmar escreva APAGAR TUDO:');
+    if ((r || '').trim().toUpperCase() !== 'APAGAR TUDO') { $('gerirMsg').textContent = 'Cancelado: nada foi apagado.'; return; }
+    try { if (CLOUD) await Cloud.wipe(conn()); }
+    catch (e) { $('gerirMsg').textContent = 'Não foi possível apagar na nuvem: ' + e.message + ' (nada foi apagado).'; return; }
+    DB.clearAll(conn()); DB.clearTouched(conn()); clearMap(); $('imp').innerHTML = ''; try { await Store.save(); } catch (e) {}
+    reload(); $('gerirMsg').textContent = 'Tudo apagado' + (CLOUD ? ' (também na nuvem)' : '') + '. Pode começar com uma base limpa.';
   };
 
   /* ---------- modo nuvem: login por convite, perfis e publicação ---------- */
@@ -226,9 +294,9 @@
   function showLogin(mode) { $('login').hidden = false; $('loginForm').hidden = mode === 'pw'; $('pwForm').hidden = mode !== 'pw'; }
   function applyRole() {
     const adm = canWrite();
-    $('secImport').hidden = !adm; $('btnIfap').hidden = !adm; $('lblRetry').hidden = !adm;
+    $('secImport').hidden = !adm; $('btnIfap').hidden = !adm; $('lblRetry').hidden = !adm; $('secGerir').hidden = !adm;
     if (CLOUD) {
-      $('secBackup').hidden = !adm; $('lblOpen').hidden = true; $('btnClear').hidden = true; $('nuvem').hidden = false;
+      $('secBackup').hidden = !adm; $('lblOpen').hidden = true; $('nuvem').hidden = false;
       $('txtBackup').textContent = 'A base está na nuvem (Supabase). Guarde cópias de vez em quando e não as coloque no GitHub: têm dados pessoais.';
     } else { $('secBackup').hidden = false; $('nuvem').hidden = true; }
   }

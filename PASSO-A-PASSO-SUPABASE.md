@@ -44,7 +44,7 @@ on conflict (email) do update set papel = excluded.papel;
 
 **7. Copiar os dados de ligação**
 1. Clique na roda dentada **Project Settings** e depois em **API** (ou *Data API / API Keys*).
-2. Copie o **Project URL** e a chave **anon / public**.
+2. Copie o **Project URL** e a chave **anon / public**. O URL é só `https://xxxxxxxx.supabase.co`, **sem** nada a seguir (sem `/rest/v1/`).
 3. **Nunca** copie nem partilhe a chave **service_role**.
 
 **8. Colar no site**
@@ -71,6 +71,12 @@ Nota: o GitHub desliga rotinas agendadas em repositórios públicos sem atividad
 
 ## Problemas comuns
 
+**“permission denied for table …”** (por exemplo `estado`)
+Faltam as permissões de acesso às tabelas. No **SQL Editor**, em **New query**, cole e execute (**Run**) o bloco `grant usage … to authenticated;` que está no fim da secção 3 do ficheiro `sql/supabase-setup.sql` (ou volte a executar o ficheiro inteiro: não estraga nada). Depois recarregue a página com **Ctrl+F5**.
+
+**“Invalid path specified in request URL”**
+O URL em `js/config.js` tem um pedaço a mais (por exemplo `/rest/v1/`). Deixe só `https://xxxxxxxx.supabase.co`. A página já corrige isto sozinha, mas convém deixar o ficheiro certo.
+
 **“Email ou palavra-passe incorretos”**
 1. Confirme o email (sem espaços) e escreva a palavra-passe à mão em vez de copiar e colar (colar pode trazer um espaço no fim).
 2. Em **Authentication → Users**, veja se a conta existe. Se foi criada por **Invite user**, ou se não está confirmada, apague-a e crie-a de novo com **Create new user** e **Auto Confirm User** marcado.
@@ -85,6 +91,24 @@ Nota: o GitHub desliga rotinas agendadas em repositórios públicos sem atividad
 O serviço de email que vem de origem no Supabase é só para testes: tem um limite muito baixo de mensagens por hora e, nos projetos novos, só envia para endereços de membros da sua organização no Supabase. Por isso as pessoas convidadas normalmente não recebem nada. Duas saídas:
 - **A mais simples (recomendada para 5 pessoas):** não usar email. O administrador cria as contas e repõe palavras-passe como acima.
 - **Mais completa:** ligar um serviço próprio de envio de emails (em **Authentication → Emails → SMTP Settings**, com um fornecedor de email transacional). Exige criar conta nesse fornecedor e validar o domínio ou o remetente. Se quiser, ajudo a escolher e a configurar.
+
+## Atualizar uma base que já criou (versão com arquivo-morto e "Gerir dados")
+
+1. No Supabase, **SQL Editor → New query**, cole **tudo** o que está em `sql/supabase-setup.sql` (a versão nova) e clique em **Run**. Deve aparecer "Success". Pode correr as vezes que for preciso. Se aparecer um erro, copie a mensagem.
+2. No GitHub, substitua os ficheiros pelos do novo ZIP (pastas `js`, `css` e `sql`, mais `base.html`).
+3. Recarregue a página com **Ctrl+F5** e entre como administrador.
+4. Para começar com uma tabela limpa: **Gerir dados → Apagar TUDO e começar limpo** e escreva `APAGAR TUDO`.
+5. Importe os Excel outra vez.
+
+Esta atualização muda a tabela `item` (acrescenta a identificação completa da subparcela, a idade em texto e o arquivo-morto). Se já tinha dados, apague-os primeiro como no passo 4.
+
+## Gerir dados (só o administrador)
+
+- **Arquivar (ocultar)**: a subparcela e o seu polígono deixam de aparecer em tudo (tabelas, mapa, totais, KML e CSV), **para todos**. Os leitores nem sequer recebem esses dados. Ficam guardadas no **Arquivo-morto** (fechado por defeito) e podem ser restauradas por tomador ou todas de uma vez.
+- **Apagar de vez**: desaparece mesmo, também na nuvem, incluindo adesões, subparcelas e polígonos que fiquem sem uso. Pede para escrever `APAGAR`.
+- **Apagar TUDO e começar limpo**: esvazia tudo, incluindo o arquivo-morto. Pede para escrever `APAGAR TUDO`.
+- Cada linha da tabela tem os botões **ocultar** e **apagar**. Os botões grandes atuam em todas as subparcelas que estão a ser mostradas (use os filtros primeiro).
+- Se importar outra vez linhas que estão no arquivo-morto, elas **continuam arquivadas**.
 
 ## Retirar ou acrescentar pessoas
 - **Retirar:** no **SQL Editor** execute `delete from public.equipa where email = 'pessoa@email.pt';` e apague a conta em **Authentication → Users**.

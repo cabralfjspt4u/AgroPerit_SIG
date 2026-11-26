@@ -55,6 +55,21 @@ Guarda **todos** os dados do Excel (tomador, apólice/adesão, parcelas, cultura
 
 Nota técnica: a base usa SQLite no navegador (sql.js, carregado de cdn.jsdelivr.net) e precisa de internet na primeira abertura.
 
+## Como a importação trata os casos especiais
+
+- **Linha `=GRUPO=`** (ex.: uma associação): não é uma subparcela. Guarda o nome e o NIF como tomador da apólice.
+- **Sem nº de adesão** (apólices individuais): importa na mesma, como "sem nº" + NIF do tomador.
+- **Campos em falta** (apólice, NIF ou nome): importa na mesma, com um valor "SEM …" e aviso no relatório. Só não entra a linha que não tem parcela ou subparcela (aparece no relatório com o conteúdo).
+- **Subparcelas como `38.1`, `38.2`**: cada uma é guardada como linha própria; partilham o polígono da subparcela 38.
+- **Mesmo nº de adesão usado por tomadores diferentes**: ficam adesões separadas ("14" e "14 · NIF") e há aviso.
+- **Datas ou NIF de tomador que variam dentro da mesma adesão**: fica o valor da primeira linha, com aviso.
+- **PMI**: guardado sempre em percentagem (20, 0,2 e 0,201 passam a 20; 0,05 passa a 5).
+- **Idade**: guardada como texto (ex.: "15 até 25", "= 3 ANOS").
+
+## Gerir dados (administrador)
+
+Arquivar (ocultar) com filtros ou por linha, restaurar, apagar de vez, e apagar tudo, tudo com efeito na nuvem. Ver o `PASSO-A-PASSO-SUPABASE.md`.
+
 ## Base partilhada online (opcional)
 
 Para uma base partilhada por até 5 pessoas (um administrador carrega, os outros consultam), com login só por convite, siga o `PASSO-A-PASSO-SUPABASE.md`. Traz:

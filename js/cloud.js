@@ -10,7 +10,7 @@
     { t: 'perfil_risco', cols: ['perfil_id', 'risco_id', 'agr', 'franquia', 'pmi'], pk: ['perfil_id', 'risco_id'], batch: 500 },
     { t: 'adesao', cols: ['id', 'apolice', 'adesao_n', 'tomador_nif', 'inicio', 'nif_tomador_apolice', 'ref_produtividade', 'ref_preco'], pk: ['id'], batch: 500 },
     { t: 'subparcela', cols: ['id', 'parcela', 'nosa', 'ifap_estado', 'ifap_em', 'ifap_classe', 'ifap_grau_cob', 'ifap_abandono', 'ifap_data_revisao', 'ifap_area_m2', 'geom'], pk: ['id'], batch: 150 },
-    { t: 'item', cols: ['id', 'adesao_id', 'subparcela_id', 'cultura_id', 'ha', 'prod_kg_ha', 'preco_eur_kg', 'idade_anos', 'perfil_id'], pk: ['id'], batch: 500 },
+    { t: 'item', cols: ['id', 'adesao_id', 'subparcela_id', 'cultura_id', 'sub_ref', 'ha', 'prod_kg_ha', 'preco_eur_kg', 'idade', 'oculto_em', 'perfil_id'], pk: ['id'], batch: 500 },
     { t: 'importacao', cols: ['id', 'ficheiro', 'em', 'linhas', 'novos', 'atualizados', 'iguais', 'avisos'], pk: ['id'], batch: 500 }
   ];
   let sb = null, ligado = false;
@@ -18,10 +18,19 @@
   const getMeta = (conn, k) => { const r = conn.all('SELECT valor FROM meta WHERE chave=?', [k])[0]; return r ? r.valor : null; };
   const setMeta = (conn, k, v) => conn.run('INSERT OR REPLACE INTO meta(chave,valor) VALUES(?,?)', [k, String(v)]);
 
+  /* aceita o endereço mesmo com espaços, aspas ou pedaços a mais (ex.: .../rest/v1/) e fica só com https://xxxx.supabase.co */
+  function limparUrl(u) {
+    u = String(u || '').trim().replace(/^['"]+|['"]+$/g, '');
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    let o; try { o = new URL(u); } catch (e) { throw new Error('O endereço (URL) em js/config.js não é válido. Deve ser parecido com https://xxxxxxxx.supabase.co'); }
+    if (/(^|\.)supabase\.com$/i.test(o.hostname)) throw new Error('O endereço em js/config.js é o do painel do Supabase. Use o “Project URL”, parecido com https://xxxxxxxx.supabase.co');
+    return o.origin;
+  }
   function init(cfg) {
     cfg = cfg || {}; if (!cfg.supabaseUrl || !cfg.supabaseKey) return false;
     if (!root.supabase || !root.supabase.createClient) return false;
-    sb = root.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: {
+    const url = limparUrl(cfg.supabaseUrl), key = String(cfg.supabaseKey).replace(/[\s'"]+/g, '');
+    sb = root.supabase.createClient(url, key, { auth: {
       persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
       storage: cfg.manterSessao ? root.localStorage : root.sessionStorage } });
     ligado = true; return true;
@@ -66,13 +75,30 @@
     return v;
   }
 
-  /* ---- publicar só o que mudou (só o administrador) ---- */
+  /* ---- publicar o que mudou: primeiro as eliminações (filhos antes dos pais), depois novos e alterados (só o administrador) ---- */
+  const DEL_ORDER = ['item', 'perfil', 'subparcela', 'adesao', 'tomador', 'parcela', 'cultura', 'importacao', 'risco'];   // perfil_risco apaga-se sozinho com o perfil
+  const WIPE_ORDER = [['item', 'id'], ['perfil_risco', 'perfil_id'], ['perfil', 'id'], ['risco', 'id'], ['subparcela', 'id'], ['adesao', 'id'], ['tomador', 'nif'], ['parcela', 'parcela'], ['cultura', 'id'], ['importacao', 'id']];
+  const chunks = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+  async function bumpVersion(conn, v0) {
+    const { data, error } = await sb.from('estado').update({ versao: v0 + 1, atualizado_em: new Date().toISOString() }).eq('id', 1).eq('versao', v0).select();
+    if (error) fail(error);
+    if (!data || !data.length) fail('Outra pessoa publicou ao mesmo tempo. Clique em "Atualizar da nuvem" e repita.');
+    setMeta(conn, 'versao_nuvem', v0 + 1); DB.clearTouched(conn);
+  }
   async function push(conn, onProgress) {
-    const n = DB.pendingCount(conn); if (!n) return { enviadas: 0 };
+    const n = DB.pendingCount(conn); if (!n) return { enviadas: 0, apagadas: 0 };
     const v0 = Number(getMeta(conn, 'versao_nuvem'));
     if (await remoteVersion() !== v0) fail('A base na nuvem foi alterada entretanto. Clique em "Atualizar da nuvem" e repita.');
-    let enviadas = 0;
-    for (const T of TABLES) {
+    let enviadas = 0, apagadas = 0;
+    for (const t of DEL_ORDER) {                                             // 1) eliminações
+      const T = TABLES.find(x => x.t === t), num = T.pk[0] === 'id';
+      const keys = conn.all('SELECT k FROM _del WHERE t=?', [t]).map(r => r.k);
+      for (const ch of chunks(keys, num ? 200 : 60)) {
+        const { error } = await sb.from(t).delete().in(T.pk[0], num ? ch.map(Number) : ch); if (error) fail(error);
+        apagadas += ch.length; if (onProgress) onProgress(t, apagadas + enviadas, n);
+      }
+    }
+    for (const T of TABLES) {                                                // 2) novos e alterados
       const tr = DB.TRACK.find(x => x.t === T.t);
       const keys = conn.all('SELECT k FROM _alt WHERE t=?', [T.t]).map(r => r.k); if (!keys.length) continue;
       for (let i = 0; i < keys.length; i += T.batch) {
@@ -82,15 +108,20 @@
           conn.all('SELECT ' + T.cols.join(',') + ' FROM ' + T.t + ' WHERE CAST(' + tr.k + ' AS TEXT) IN (' + ch.map(() => '?').join(',') + ')', ch).forEach(r => rows.push(r));
         }
         if (rows.length) { const { error } = await sb.from(T.t).upsert(rows, { onConflict: T.pk.join(',') }); if (error) fail(error); }
-        enviadas += rows.length; if (onProgress) onProgress(T.t, enviadas, n);
+        enviadas += rows.length; if (onProgress) onProgress(T.t, apagadas + enviadas, n);
       }
     }
-    const { data, error } = await sb.from('estado').update({ versao: v0 + 1, atualizado_em: new Date().toISOString() }).eq('id', 1).eq('versao', v0).select();
-    if (error) fail(error);
-    if (!data || !data.length) fail('Outra pessoa publicou ao mesmo tempo. Clique em "Atualizar da nuvem" e repita.');
-    setMeta(conn, 'versao_nuvem', v0 + 1); DB.clearTouched(conn);
-    return { enviadas };
+    await bumpVersion(conn, v0);
+    return { enviadas, apagadas };
   }
 
-  root.Cloud = { init, use, enabled, session, signIn, signOut, setPassword, resetPassword, role, pull, push, remoteVersion, TABLES };
+  /* ---- apagar TUDO na nuvem (só o administrador) ---- */
+  async function wipe(conn) {
+    const v0 = Number(getMeta(conn, 'versao_nuvem'));
+    if (await remoteVersion() !== v0) fail('A base na nuvem foi alterada entretanto. Clique em "Atualizar da nuvem" e repita.');
+    for (const [t, c] of WIPE_ORDER) { const { error } = await sb.from(t).delete().not(c, 'is', null); if (error) fail(error); }
+    await bumpVersion(conn, v0);
+  }
+
+  root.Cloud = { init, use, enabled, session, signIn, signOut, setPassword, resetPassword, role, pull, push, wipe, remoteVersion, TABLES };
 })(typeof window !== 'undefined' ? window : globalThis);

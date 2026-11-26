@@ -92,3 +92,10 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
 #login a{display:block;margin-top:10px;text-decoration:underline;cursor:pointer}
 .cloudbar{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;font-size:12.5px}
 .cloudbar #nuvemTxt{font-weight:600}
+
+/* ---------- botões pequenos nas linhas e arquivo ---------- */
+button.mini{font:inherit;font-size:11.5px;padding:2px 7px;margin:0 4px 0 0;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:5px;cursor:pointer}
+button.mini:hover{border-color:var(--btn)}
+button.mini.danger{color:var(--err);border-color:var(--err)}
+td.act{white-space:nowrap}
+#arqList .item{cursor:default;display:flex;gap:8px;align-items:center;justify-content:space-between}

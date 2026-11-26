@@ -53,6 +53,7 @@
     <div id="secImport">
     <h2>1. Importar Excel</h2>
     <p class="muted">Pode escolher vários ficheiros. O que já existe não é repetido; o que for novo é acrescentado; o que mudou é atualizado.</p>
+    <label class="check"><input id="chkFill" type="checkbox"> Preencher células em branco de apólice, adesão, NIF e nome com os valores da linha de cima</label>
     <label class="btn">Escolher Excel(s)<input id="fileXls" type="file" accept=".xlsx,.xls,.xlsm,.csv" multiple></label>
     <div id="imp"></div>
     </div>
@@ -81,6 +82,29 @@
       <button id="btnCsv" class="btn ghost" type="button">Tabela para Excel (CSV)</button>
     </div>
 
+    <div id="secGerir">
+    <h2>Gerir dados <span class="muted">(administrador)</span></h2>
+    <p class="muted">Atuam nas subparcelas que estão a ser mostradas (filtros acima). Também há botões “ocultar” e “apagar” em cada linha da tabela.</p>
+    <div id="gerirInfo" class="muted"></div>
+    <div class="actions">
+      <button id="btnArq" class="btn" type="button">Arquivar (ocultar) as mostradas</button>
+      <button id="btnDel" class="btn ghost danger" type="button">Apagar de vez as mostradas</button>
+    </div>
+    <div id="gerirMsg" class="muted"></div>
+    <details id="arquivo" class="how">
+      <summary>Arquivo-morto</summary>
+      <div id="arqInfo" class="muted"></div>
+      <div id="arqList"></div>
+      <div class="actions">
+        <button id="btnRestAll" class="btn ghost" type="button">Restaurar tudo</button>
+        <button id="btnPurge" class="btn ghost danger" type="button">Apagar o arquivo de vez</button>
+      </div>
+    </details>
+    <div class="actions">
+      <button id="btnWipe" class="btn ghost danger" type="button">Apagar TUDO e começar limpo</button>
+    </div>
+    </div>
+
     <div id="secBackup">
     <h2>Cópia de segurança</h2>
     <div id="dbinfo" class="muted"></div>
@@ -89,7 +113,6 @@
       <button id="btnSave" class="btn" type="button">Guardar cópia compactada</button>
       <button id="btnSaveRaw" class="btn ghost" type="button">Guardar cópia normal</button>
       <label class="btn ghost" id="lblOpen">Abrir cópia<input id="fileDb" type="file" accept=".sqlite,.gz,.db"></label>
-      <button id="btnClear" class="btn ghost danger" type="button">Apagar tudo</button>
     </div>
     </div>
 
